@@ -94,8 +94,7 @@
 <div class="container">
     <h1>Pokémon Battle Simulator</h1>
 
-    <div id="pokemon-selection" class="pokemon-grid"></div> <!--this is what i beign selecteted in the fetch adn dispay elements and then adding the new card node into here-->
-
+    <div id="pokemon-selection" class="pokemon-grid"></div> 
     <button class="battle-button" onclick="initiateBattle()">Battle!</button>
     <button class="restart-button" onclick="restartBattle()">Restart</button>
 
@@ -118,29 +117,21 @@
         1, 4, 7, 25, 35, 37, 39, 52, 63, 66, 72, 92, 95, 133, 151
     ];
 
+
     async function fetchAndDisplayPokemons() {
         const pokemonSelection = document.getElementById('pokemon-selection');
         for (const id of pokemonList) {
             const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
-            const pokemon = await response.json(); //parsinfg the data which is recevied after the api request
-            //this can be avoided if axios is used
+            const pokemon = await response.json();
 
-            //show the pokemon stats or basically in postman show the response which you get and then tell how did you use in the given file later in order tto create the funcitonality which you wanted to do
             const card = document.createElement('div');
-            //what is to be done for the randmooinzation
-            
-
-
-            //here i am naming the data- attributes since i dont want it to clash with some already existing attributes 
-            card.classList.add('pokemon-card'); //this is for addingn the styling to the given pokemon cadr
-            card.setAttribute('data-name', pokemon.name); //we are adding data attributes here so that we can retrive the data stored for each of the pokemon using the get attribute later in the jasvsript while we create the battle funcitonality between two pokemon
+            card.classList.add('pokemon-card');
+            card.setAttribute('data-name', pokemon.name);
             card.setAttribute('data-attack', pokemon.stats[1].base_stat);
             card.setAttribute('data-defense', pokemon.stats[2].base_stat);
-            card.setAttribute('data-move-power', '80');
             card.setAttribute('data-speed', pokemon.stats[5].base_stat);
             card.setAttribute('id', `pokemon-${pokemon.name}`);
-            //now here adding the code which is predominantly adding waht is to dispayed in the front end which shows about what pokemon and what is to be done
-            card.innerHTML = ` 
+            card.innerHTML = `
                 <h3>${pokemon.name}</h3>
                 <img src="${pokemon.sprites.front_default}" alt="${pokemon.name}">
                 <audio id="cry-${pokemon.name}" src="https://play.pokemonshowdown.com/audio/cries/${pokemon.name.toLowerCase()}.mp3"></audio>
@@ -158,12 +149,13 @@
         }
     }
 
+
     function playCry(name) {
         const cry = document.getElementById(`cry-${name}`);
         cry.play();
     }
 
-    //here we are trying to put the details of the pokemon as the user clicks on the given button 
+ 
     async function showDetails(id) {
         const overlay = document.getElementById('overlay');
         const detailsModal = document.getElementById('pokemon-details');
@@ -174,10 +166,8 @@
 
         const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
         const pokemon = await response.json();
-
         const speciesResponse = await fetch(pokemon.species.url);
         const speciesData = await speciesResponse.json();
-
         const locationResponse = await fetch(pokemon.location_area_encounters);
         const locationData = await locationResponse.json();
 
@@ -190,17 +180,24 @@
             <p><strong>Moves:</strong> ${pokemon.moves.map(move => move.move.name).slice(0, 5).join(', ')}</p>
             <p><strong>Color:</strong> ${speciesData.color.name}</p>
             <p><strong>Shape:</strong> ${speciesData.shape.name}</p>
-            <p><strong>Locations:</strong> ${locationData.length > 0 ? locationData.slice(0,5).map(loc => loc.location_area.name).join(', ') : 'Unknown'}</p>
+            <p><strong>Locations:</strong> ${locationData.length > 0 ? locationData.slice(0, 5).map(loc => loc.location_area.name).join(', ') : 'Unknown'}</p>
             <p><strong>Egg Groups:</strong> ${speciesData.egg_groups.map(group => group.name).join(', ')}</p>
         `;
     }
 
+    
     function closeDetails() {
-        document.getElementById('overlay').style.display = 'none'; //as soon as this button is clicked then we are emptying the overlay
+        document.getElementById('overlay').style.display = 'none';
         document.getElementById('pokemon-details').style.display = 'none';
     }
 
-    function initiateBattle() {
+    
+    async function initiateBattle() {
+        if (selectedPokemon.length < 2) {
+            alert("Please select two Pokémon for the battle.");
+            return;
+        }
+
         const [pokemon1, pokemon2] = selectedPokemon;
         const pokemon1Name = pokemon1.getAttribute('data-name');
         const pokemon2Name = pokemon2.getAttribute('data-name');
@@ -210,13 +207,16 @@
         const pokemon2Attack = parseInt(pokemon2.getAttribute('data-attack'));
         const pokemon1Defense = parseInt(pokemon1.getAttribute('data-defense'));
         const pokemon2Speed = parseInt(pokemon2.getAttribute('data-speed'));
-        //we are assuming the given data since we are not able to fetch it for a 
-        const movePower = 80;
-        const accuracy = 1.0;
-        const typeEffectiveness = 1.0;
 
-        const pokemon1Damage = (((2 * 50 / 5) + 2) * (pokemon1Attack / pokemon2Defense) * movePower * typeEffectiveness * accuracy * pokemon1Speed / 100);
-        const pokemon2Damage = (((2 * 50 / 5) + 2) * (pokemon2Attack / pokemon1Defense) * movePower * typeEffectiveness * accuracy * pokemon2Speed / 100);
+        
+        const pokemon1Move = await getRandomMove(pokemon1Name);
+        const pokemon2Move = await getRandomMove(pokemon2Name);
+        const typeEffectiveness1 = await getTypeEffectiveness(pokemon1Name, pokemon2Name);
+        const typeEffectiveness2 = await getTypeEffectiveness(pokemon2Name, pokemon1Name);
+
+        
+        const pokemon1Damage = calculateDamage(pokemon1Attack, pokemon2Defense, pokemon1Speed, pokemon1Move.power, typeEffectiveness1, pokemon1Move.accuracy);
+        const pokemon2Damage = calculateDamage(pokemon2Attack, pokemon1Defense, pokemon2Speed, pokemon2Move.power, typeEffectiveness2, pokemon2Move.accuracy);
 
         const battleLog = document.getElementById('battle-log');
         let winner;
@@ -230,12 +230,61 @@
         }
 
         battleLog.innerHTML = `
-            <p>${pokemon1Name} caused ${Math.round(pokemon1Damage)} damage.</p>
-            <p>${pokemon2Name} caused ${Math.round(pokemon2Damage)} damage.</p>
+            <p>${pokemon1Name} used ${pokemon1Move.name} and caused ${Math.round(pokemon1Damage)} damage.</p>
+            <p>${pokemon2Name} used ${pokemon2Move.name} and caused ${Math.round(pokemon2Damage)} damage.</p>
             <h2>${winner} wins!</h2>
         `;
     }
 
+    
+    async function getRandomMove(pokemonName) {
+        const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${pokemonName}`);
+        const data = await response.json();
+        const moves = data.moves;
+        const randomMoveIndex = Math.floor(Math.random() * moves.length);
+        const moveUrl = moves[randomMoveIndex].move.url;
+
+        const moveResponse = await fetch(moveUrl);
+        const moveData = await moveResponse.json();
+        
+        return {
+            name: moveData.name,
+            power: moveData.power || 50,  
+            accuracy: moveData.accuracy || 100  
+        };
+    }
+
+    
+    async function getTypeEffectiveness(attackerName, defenderName) {
+        const attackerResponse = await fetch(`https://pokeapi.co/api/v2/pokemon/${attackerName}`);
+        const attackerData = await attackerResponse.json();
+        const attackerType = attackerData.types[0].type.name;
+
+        const defenderResponse = await fetch(`https://pokeapi.co/api/v2/pokemon/${defenderName}`);
+        const defenderData = await defenderResponse.json();
+        const defenderType = defenderData.types[0].type.name;
+
+        const typeResponse = await fetch(`https://pokeapi.co/api/v2/type/${attackerType}`);
+        const typeData = await typeResponse.json();
+
+        const { double_damage_to, half_damage_to, no_damage_to } = typeData.damage_relations;
+
+        if (double_damage_to.some(type => type.name === defenderType)) {
+            return 2.0;  
+        } else if (half_damage_to.some(type => type.name === defenderType)) {
+            return 0.5; 
+        } else if (no_damage_to.some(type => type.name === defenderType)) {
+            return 0.0; 
+        }
+
+        return 1.0;  
+    }
+
+    function calculateDamage(attack, defense, speed, movePower, typeEffectiveness, accuracy) {
+        const level = 50;
+        const modifier = typeEffectiveness * (accuracy / 100) * (speed / 100);
+        return (((2 * level / 5 + 2) * movePower * (attack / defense)) / 50 + 2) * modifier;
+    }
     function restartBattle() {
         selectedPokemon.length = 0;
         document.querySelectorAll('.pokemon-card').forEach(card => card.classList.remove('selected', 'winner'));
@@ -244,29 +293,7 @@
 
     fetchAndDisplayPokemons();
 </script>
-
 </body>
 </html>
 
 
-<!-- do the api call to the given pokemon
-data madyu after fetching
-await ()
-response.json()
-
-a.types.slot 
-https://pokeapi.co/api/v2/type/${a.types.slot}
-
-take the data relating to the second pokeon and get the type of it 
-and after the two of them 
-
-after getting the types.slot se respojnse
-.damage_relations(
-    funciton(if pokemon 2.type   ====  je repsonse madyu from the next link . double damage from)
-    then after we get the name see the 4 conditions and then put if it gets double damage half damage etc 
-    also see no damage from and then mnake the effectiveness change
-)
-now go to the moves and after that is recvied then moves.url
-pokeapi.com/api/v2/move/4 and then do a get request 
-
-and what we receive from here is the accuracy for the showDetails -->
